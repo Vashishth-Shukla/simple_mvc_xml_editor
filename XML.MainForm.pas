@@ -40,11 +40,15 @@ type
     miFileExit: TMenuItem;
 
     procedure FormCreate(Sender: TObject);
+    procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
     procedure FormDestroy(Sender: TObject);
     procedure vstContentGetText(Sender: TBaseVirtualTree; Node: PVirtualNode;
       Column: TColumnIndex; TextType: TVSTTextType; var CellText: string);
     procedure vstContentGetNodeDataSize(Sender: TBaseVirtualTree;
       var NodeDataSize: Integer);
+    procedure vstContentEditing(Sender: TBaseVirtualTree; Node: PVirtualNode; Column: TColumnIndex; var Allowed: Boolean);
+    procedure vstContentNewText(Sender: TBaseVirtualTree; Node: PVirtualNode; Column: TColumnIndex; NewText: string);
+    procedure vstContentDblClick(Sender: TObject);
     procedure popOptPopup(Sender: TObject);
     procedure miOptRnmClick(Sender: TObject);
     procedure miOptAdElmBfrClick(Sender: TObject);
@@ -68,6 +72,7 @@ type
     procedure UpdateTree;
     procedure PopulateNode(Parent: PVirtualNode; ModelNode: TXmlNodeItem);
     function GetSelectedNode: TXmlNodeItem;
+    function ConfirmDiscardChanges: Boolean;
   end;
 
 var
@@ -77,19 +82,36 @@ implementation
 
 {$R *.dfm}
 
+
 procedure TMainForm.FormCreate(Sender: TObject);
 begin
+  sbStatus.SimplePanel := True;
   FController := TMainViewController.Create;
   InitializeTree;
   vstContent.PopupMenu := popOpt;
   popOpt.OnPopup := popOptPopup;
-  sbStatus.SimpleText := 'test1';
+  vstContent.OnEditing := vstContentEditing;
+  vstContent.OnNewText := vstContentNewText;
+  vstContent.OnDblClick := vstContentDblClick;
   miFileNewClick(nil);
+end;
+
+procedure TMainForm.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
+begin
+  CanClose := ConfirmDiscardChanges;
 end;
 
 procedure TMainForm.FormDestroy(Sender: TObject);
 begin
   FreeAndNil(FController);
+end;
+
+// add further logic ... yes no what ... possibly distroy the nodes here once chosen ... more logic
+function TMainForm.ConfirmDiscardChanges: Boolean;
+begin
+  Result := True;
+  if FIsModified then
+    Result := MessageDlg('You have unsaved changes. Do you want to discard them?', mtConfirmation, [mbYes, mbNo], 0) = mrYes;
 end;
 
 procedure TMainForm.InitializeTree;
@@ -110,7 +132,8 @@ begin
   vstContent.BeginUpdate;
   try
     vstContent.Clear;
-    PopulateNode(nil, FController.RootNode);
+    if Assigned(FController.RootNode) then
+      PopulateNode(nil, FController.RootNode);
     vstContent.FullExpand;
   finally
     vstContent.EndUpdate;
@@ -129,8 +152,11 @@ begin
     Data^.Xml := ModelNode;
   if ModelNode.NodeType = ntElement then
   begin
-    for Child in ModelNode.Children do
+    for Child in ModelNode.Attributes do
       PopulateNode(Node, Child);
+    for Child in ModelNode.Children do
+      if Child.NodeType in [ntElement,  ntText, ntCData, ntComment] then
+        PopulateNode(Node, Child);
   end;
 end;
 
@@ -180,21 +206,60 @@ begin
   NodeDataSize := SizeOf(TNodeData);
 end;
 
+procedure TMainForm.vstContentEditing(Sender: TBaseVirtualTree; Node: PVirtualNode; Column: TColumnIndex; var Allowed: Boolean);
+begin
+  Allowed := Column = 1;
+end;
+
+procedure TMainForm.vstContentNewText(Sender: TBaseVirtualTree; Node: PVirtualNode; Column: TColumnIndex; NewText: string);
+var
+  Data: PNodeData;
+begin
+  if Column <> 1 then Exit;
+  Data := Sender.GetNodeData(Node);
+  if Assigned(Data) and Assigned(Data.Xml) then
+  begin
+    if Data.Xml.NodeType = ntElement then
+    begin
+      sbStatus.SimpleText := 'Cannot assign value directly to element node.';
+      Exit;
+    end;
+    Data.Xml.Value := NewText;
+    FIsModified := True;
+    sbStatus.SimpleText := 'Node value updated.';
+  end;
+end;
+
+
+procedure TMainForm.vstContentDblClick(Sender: TObject);
+var
+  Node: TXmlNodeItem;
+begin
+  Node := GetSelectedNode;
+
+  if Assigned(vstContent.FocusedNode) and (Node.NodeType <> ntElement) then
+    vstContent.EditNode(vstContent.FocusedNode, 1);
+
+end;
+
 procedure TMainForm.popOptPopup(Sender: TObject);
 var
   Node: TXmlNodeItem;
 begin
   Node := GetSelectedNode;
   miOptRnm.Enabled      := Assigned(Node) and (Node.NodeType in [ntElement, ntAttribute]);
+
   miOptAdElem.Enabled   := Assigned(Node) and (Node.NodeType = ntElement);
   miOptAdElmBfr.Enabled := Assigned(Node) and Node.HasParent;
   miOptAdElmAft.Enabled := Assigned(Node) and Node.HasParent;
   miOptAdElmCld.Enabled := Assigned(Node) and (Node.NodeType = ntElement);
+
   miOptAdAttri.Enabled  := Assigned(Node) and (Node.NodeType = ntElement);
+
   miOptAdTxt.Enabled    := Assigned(Node) and (Node.NodeType = ntElement);
   miOptAdCmt.Enabled    := Assigned(Node) and (Node.NodeType = ntElement);
   miOptAdCDT.Enabled    := Assigned(Node) and (Node.NodeType = ntElement);
-  miOptDlt.Enabled      := Assigned(Node);
+  miOptDlt.Enabled     := Assigned(Node) and Node.HasParent;
 end;
 
 procedure TMainForm.miOptRnmClick(Sender: TObject);
@@ -208,68 +273,114 @@ begin
   if NewName <> '' then
     FController.RenameNode(Node, NewName);
   UpdateTree;
+  sbStatus.SimpleText := 'Node renamed.';
 end;
 
+
 procedure TMainForm.miOptAdElmBfrClick(Sender: TObject);
+var
+  NodeName : string;
 begin
-  FController.InsertBefore(GetSelectedNode, ntElement, 'element', '');
+  NodeName := InputBox('Enter Node Name', 'Name:', '');
+  if NodeName = '' then Exit;
+  FController.InsertBefore(GetSelectedNode, ntElement, NodeName, '');
   UpdateTree;
+  sbStatus.SimpleText := 'Element inserted before.';
 end;
 
 procedure TMainForm.miOptAdElmAftClick(Sender: TObject);
+var
+  NodeName : string;
 begin
-  FController.InsertAfter(GetSelectedNode, ntElement, 'element', '');
+  NodeName := InputBox('Enter Node Name', 'Name:', '');
+  if NodeName = '' then Exit;
+  FController.InsertAfter(GetSelectedNode, ntElement, NodeName, '');
   UpdateTree;
+  sbStatus.SimpleText := 'Element inserted after.';
 end;
+
 
 procedure TMainForm.miOptAdElmCldClick(Sender: TObject);
+var
+  NodeName : string;
 begin
-  FController.AddChild(GetSelectedNode, ntElement, 'element', '');
+  NodeName := InputBox('Enter Node Name', 'Name:', '');
+  if NodeName = '' then Exit;
+  FController.AddChild(GetSelectedNode, ntElement, NodeName, '');
   UpdateTree;
+  sbStatus.SimpleText := 'Child element added.';
 end;
 
+
 procedure TMainForm.miOptAdAttriClick(Sender: TObject);
+var
+  AttriName : string;
+  AttriVal  : string;
 begin
-  FController.AddAttribute(GetSelectedNode, 'attribute', 'value');
+  AttriName := InputBox('Enter Attribute Name', 'Attribute Name:', '');
+  if AttriName = '' then Exit;
+  AttriVal := InputBox('Enter Value', 'Attribure Value:', '');
+  FController.AddAttribute(GetSelectedNode, AttriName, AttriVal);
   UpdateTree;
+  sbStatus.SimpleText := 'Attribute added.';
 end;
 
 procedure TMainForm.miOptAdTxtClick(Sender: TObject);
+var
+  NodeValue : string;
 begin
-  FController.AddChild(GetSelectedNode, ntText, '', 'text value');
+  NodeValue := InputBox('Enter Text', 'Text:', '');
+  if NodeValue = '' then Exit;
+  FController.AddChild(GetSelectedNode, ntText, '', NodeValue);
   UpdateTree;
+  sbStatus.SimpleText := 'Text node added.';
 end;
 
 procedure TMainForm.miOptAdCmtClick(Sender: TObject);
+var
+  NodeValue : string;
 begin
-  FController.AddChild(GetSelectedNode, ntComment, '', 'comment here');
+  NodeValue := InputBox('Enter Comment', 'Comment:', '');
+  if NodeValue = '' then Exit;
+  FController.AddChild(GetSelectedNode, ntComment, '', NodeValue);
   UpdateTree;
+  sbStatus.SimpleText := 'Comment node added.';
 end;
 
 procedure TMainForm.miOptAdCDTClick(Sender: TObject);
+var
+  NodeValue : string;
 begin
-  FController.AddChild(GetSelectedNode, ntCData, '', 'cdata content');
+  NodeValue := InputBox('Enter CDATA', 'CDATA:', '');
+  if NodeValue = '' then Exit;
+  FController.AddChild(GetSelectedNode, ntCData, '', NodeValue);
   UpdateTree;
+  sbStatus.SimpleText := 'CDATA node added.';
 end;
 
 procedure TMainForm.miOptDltClick(Sender: TObject);
 begin
   FController.DeleteNode(GetSelectedNode);
   UpdateTree;
+  sbStatus.SimpleText := 'Node deleted.';
 end;
 
+// check if old is gone ... and new is created
 procedure TMainForm.miFileNewClick(Sender: TObject);
 begin
+  if not ConfirmDiscardChanges then Exit;
   FController.Clear;
   FCurrentFileName := '';
   FIsModified := True;
   UpdateTree;
+  sbStatus.SimpleText := 'New XML created.';
 end;
 
 procedure TMainForm.miFileOpenClick(Sender: TObject);
 var
   Dlg: TOpenDialog;
 begin
+  if not ConfirmDiscardChanges then Exit;
   Dlg := TOpenDialog.Create(nil);
   try
     Dlg.Filter := 'XML files (*.xml)|*.xml|All files (*.*)|*.*';
@@ -280,6 +391,7 @@ begin
         FCurrentFileName := Dlg.FileName;
         FIsModified := False;
         UpdateTree;
+        sbStatus.SimpleText := 'File loaded.';
       except
         on E: Exception do
           ShowMessage('Error loading: ' + E.Message);
@@ -299,6 +411,7 @@ begin
     try
       FController.SaveToXml(FCurrentFileName);
       FIsModified := False;
+      sbStatus.SimpleText := 'File saved.';
     except
       on E: Exception do
         ShowMessage('Error saving: ' + E.Message);
@@ -315,12 +428,14 @@ begin
     Dlg.Filter := 'XML files (*.xml)|*.xml|All files (*.*)|*.*';
     Dlg.DefaultExt := '.xml';
     Dlg.Title := 'Save XML File As';
+    Dlg.Options := Dlg.Options + [ofOverwritePrompt];
 
     if Dlg.Execute then
     begin
       FController.SaveToXml(Dlg.FileName);
       FCurrentFileName := Dlg.FileName;
       FIsModified := False;
+      sbStatus.SimpleText := 'File saved.';
     end;
   finally
     Dlg.Free;

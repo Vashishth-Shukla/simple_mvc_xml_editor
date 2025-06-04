@@ -11,6 +11,7 @@ object MainForm: TMainForm
   Font.Name = 'Segoe UI'
   Font.Style = []
   Menu = mmMain
+  Position = poMainFormCenter
   OnCreate = FormCreate
   OnDestroy = FormDestroy
   TextHeight = 15

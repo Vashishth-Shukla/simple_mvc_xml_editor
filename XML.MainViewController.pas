@@ -55,11 +55,12 @@ function TMainViewController.AddChild(AParent: TXmlNodeItem; AType: TXmlNodeType
 begin
   Result := TXmlNodeItem.Create(AType);
   Result.Parent := AParent;
-  if AType in [ntElement, ntAttribute] then
-    Result.Name := AName;
-  if AType <> ntElement then
-    Result.Value := AValue;
-  if Assigned(AParent) then
+  Result.Name := AName;
+  Result.Value := AValue;
+
+  if Result.NodeType = ntAttribute then
+    AParent.Attributes.Add(Result)
+  else
     AParent.Children.Add(Result);
 end;
 
@@ -68,6 +69,7 @@ begin
   Result := AddChild(AParent, ntAttribute, AName, AValue);
 end;
 
+// you cannot delete the root but rename it
 procedure TMainViewController.DeleteNode(ANode: TXmlNodeItem);
 begin
   if Assigned(ANode) and Assigned(ANode.Parent) then
@@ -127,6 +129,7 @@ var
   function CreateNode(XMLNode: IXMLDOMNode): TXmlNodeItem;
   var
     SubNode: IXMLDOMNode;
+    AttrNode: TXmlNodeItem;
     i: Integer;
   begin
     Result := TXmlNodeItem.Create(ntElement);
@@ -134,10 +137,13 @@ var
 
     for i := 0 to XMLNode.attributes.length - 1 do
     begin
-      Result.Children.Add(TXmlNodeItem.Create(ntAttribute));
-      Result.Children.Last.Name := XMLNode.attributes.item[i].nodeName;
-      Result.Children.Last.Value := XMLNode.attributes.item[i].text;
+      AttrNode := TXmlNodeItem.Create(ntAttribute);
+      AttrNode.Name := XMLNode.attributes.item[i].nodeName;
+      AttrNode.Value := XMLNode.attributes.item[i].text;
+      AttrNode.Parent := Result;
+      Result.Attributes.Add(AttrNode);
     end;
+
 
     for i := 0 to XMLNode.childNodes.length - 1 do
     begin
@@ -149,11 +155,11 @@ var
           Result.Children.Add(CreateNode(SubNode));
         NODE_TEXT:
           if Trim(SubNode.text) <> '' then
-            Result.Children.Add(AddChild(Result, ntText, '', SubNode.text));
+            AddChild(Result, ntText, '', SubNode.text);
         NODE_CDATA_SECTION:
-          Result.Children.Add(AddChild(Result, ntCData, '', SubNode.text));
+          AddChild(Result, ntCData, '', SubNode.text);
         NODE_COMMENT:
-          Result.Children.Add(AddChild(Result, ntComment, '', SubNode.text));
+          AddChild(Result, ntComment, '', SubNode.text);
       else
         // unsupported node types ignored
       end;
@@ -180,34 +186,51 @@ var
   var
     NewElem: IXMLDOMElement;
     i: Integer;
+    Child: TXmlNodeItem;
   begin
+    // Save attributes of this node
+    for i := 0 to Node.Attributes.Count - 1 do
+      Parent.setAttribute(Node.Attributes[i].Name, Node.Attributes[i].Value);
+
+    // Save children (elements, text, comments, etc.)
     for i := 0 to Node.Children.Count - 1 do
     begin
-      case Node.Children[i].NodeType of
-        ntAttribute:
-          Parent.setAttribute(Node.Children[i].Name, Node.Children[i].Value);
+      Child := Node.Children[i];
+      case Child.NodeType of
         ntElement:
           begin
-            NewElem := Doc.createElement(Node.Children[i].Name);
+            NewElem := Doc.createElement(Child.Name);
             Parent.appendChild(NewElem);
-            SaveNode(Node.Children[i], NewElem);
+            SaveNode(Child, NewElem); // Recurse
           end;
         ntText:
-          Parent.appendChild(Doc.createTextNode(Node.Children[i].Value));
+          Parent.appendChild(Doc.createTextNode(Child.Value));
         ntCData:
-          Parent.appendChild(Doc.createCDATASection(Node.Children[i].Value));
+          Parent.appendChild(Doc.createCDATASection(Child.Value));
         ntComment:
-          Parent.appendChild(Doc.createComment(Node.Children[i].Value));
+          Parent.appendChild(Doc.createComment(Child.Value));
       end;
     end;
   end;
 
+var
+  RootElem: IXMLDOMElement;
 begin
   Doc := CoDOMDocument60.Create;
-  Doc.loadXML(Format('<?xml version="1.0" encoding="UTF-8"?><%s/>', [FRootNode.Name]));
-  SaveNode(FRootNode, Doc.documentElement);
+  Doc.async := False;
+  Doc.validateOnParse := False;
+
+  // Create root element from FRootNode
+  RootElem := Doc.createElement(FRootNode.Name);
+  Doc.appendChild(RootElem);
+
+  // Save structure recursively
+  SaveNode(FRootNode, RootElem);
+
+  // Save file
   Doc.save(Filename);
 end;
+
 
 end.
 
