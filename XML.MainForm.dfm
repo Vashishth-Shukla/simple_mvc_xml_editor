@@ -2,7 +2,7 @@ object MainForm: TMainForm
   Left = 0
   Top = 0
   Caption = 'XML Editor'
-  ClientHeight = 441
+  ClientHeight = 461
   ClientWidth = 624
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -10,7 +10,7 @@ object MainForm: TMainForm
   Font.Height = -12
   Font.Name = 'Segoe UI'
   Font.Style = []
-  Menu = mmMenu
+  Menu = mmMain
   OnCreate = FormCreate
   OnDestroy = FormDestroy
   TextHeight = 15
@@ -18,7 +18,7 @@ object MainForm: TMainForm
     Left = 0
     Top = 0
     Width = 624
-    Height = 422
+    Height = 442
     Align = alClient
     DefaultNodeHeight = 19
     Header.AutoSizeIndex = 0
@@ -27,63 +27,22 @@ object MainForm: TMainForm
     TabOrder = 0
     Touch.InteractiveGestures = [igPan, igPressAndTap]
     Touch.InteractiveGestureOptions = [igoPanSingleFingerHorizontal, igoPanSingleFingerVertical, igoPanInertia, igoPanGutter, igoParentPassthrough]
-    ExplicitLeft = 224
-    ExplicitTop = 192
-    ExplicitWidth = 200
-    ExplicitHeight = 100
+    ExplicitHeight = 422
     Columns = <>
   end
   object sbStatus: TStatusBar
     Left = 0
-    Top = 422
+    Top = 442
     Width = 624
     Height = 19
     Panels = <>
-    ExplicitLeft = 320
-    ExplicitTop = 232
-    ExplicitWidth = 0
-  end
-  object ActionList: TActionList
-    Top = 8
-    object ActionFileSave: TAction
-      Caption = 'Save'
-      ShortCut = 16467
-      OnExecute = ActionFileSaveExecute
-    end
-    object ActionFileLoad: TAction
-      Caption = 'Load'
-      ShortCut = 16460
-      OnExecute = ActionFileLoadExecute
-    end
-  end
-  object mmMenu: TMainMenu
-    Top = 64
-    object mmFile: TMenuItem
-      Caption = 'File'
-      object miFileNew: TMenuItem
-        Caption = 'New'
-      end
-      object miFileOpen: TMenuItem
-        Caption = 'Open...'
-      end
-      object miFileSave: TMenuItem
-        Caption = 'Save'
-      end
-      object miFileSaveAs: TMenuItem
-        Caption = 'Save As...'
-      end
-      object N1: TMenuItem
-        Caption = '-'
-      end
-      object miFileExit: TMenuItem
-        Caption = 'Exit'
-      end
-    end
+    ExplicitTop = 422
   end
   object popOpt: TPopupMenu
-    Top = 120
+    Top = 72
     object miOptRnm: TMenuItem
       Caption = 'Rename Element'
+      OnClick = miOptRnmClick
     end
     object N3: TMenuItem
       Caption = '-'
@@ -92,31 +51,68 @@ object MainForm: TMainForm
       Caption = 'Add Element'
       object miOptAdElmBfr: TMenuItem
         Caption = 'Add Before'
+        OnClick = miOptAdElmBfrClick
       end
       object miOptAdElmAft: TMenuItem
         Caption = 'Add After'
+        OnClick = miOptAdElmAftClick
       end
       object miOptAdElmCld: TMenuItem
         Caption = 'Add Child'
+        OnClick = miOptAdElmCldClick
       end
     end
     object miOptAdAttri: TMenuItem
       Caption = 'Add Attribute'
+      OnClick = miOptAdAttriClick
     end
     object miOptAdTxt: TMenuItem
       Caption = 'Add Text'
+      OnClick = miOptAdTxtClick
     end
     object miOptAdCmt: TMenuItem
       Caption = 'Add Comment'
+      OnClick = miOptAdCmtClick
     end
     object miOptAdCDT: TMenuItem
       Caption = 'Add CDATA'
+      OnClick = miOptAdCDTClick
     end
     object N2: TMenuItem
       Caption = '-'
     end
     object miOptDlt: TMenuItem
       Caption = 'Delete'
+      OnClick = miOptDltClick
+    end
+  end
+  object mmMain: TMainMenu
+    Top = 8
+    object mmFile: TMenuItem
+      Caption = 'File'
+      object miFileNew: TMenuItem
+        Caption = 'New'
+        OnClick = miFileNewClick
+      end
+      object miFileOpen: TMenuItem
+        Caption = 'Open...'
+        OnClick = miFileOpenClick
+      end
+      object miFileSave: TMenuItem
+        Caption = 'Save'
+        OnClick = miFileSaveClick
+      end
+      object miFileSaveAs: TMenuItem
+        Caption = 'Save As...'
+        OnClick = miFileSaveAsClick
+      end
+      object N1: TMenuItem
+        Caption = '-'
+      end
+      object miFileExit: TMenuItem
+        Caption = 'Exit'
+        OnClick = miFileExitClick
+      end
     end
   end
 end

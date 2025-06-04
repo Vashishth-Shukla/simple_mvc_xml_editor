@@ -3,22 +3,45 @@ unit XML.MainForm;
 interface
 
 uses
-  System.SysUtils, System.Variants, System.Classes, System.Actions,
-  Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.ActnList,
-  Vcl.Menus, Vcl.ComCtrls, Vcl.ExtDlgs,
+  System.SysUtils,
+  System.Classes,
+  Vcl.Graphics,
+  Vcl.Controls,
+  Vcl.Forms,
+  Vcl.Dialogs,
+  Vcl.Menus,
+  Vcl.ComCtrls,
+  VirtualTrees,
+  VirtualTrees.Types,
   XML.MainViewController,
   XML.MainModel,
-  VirtualTrees, VirtualTrees.BaseAncestorVCL,
-  VirtualTrees.BaseTree, VirtualTrees.AncestorVCL;
+  VirtualTrees.BaseAncestorVCL,
+  VirtualTrees.BaseTree,
+  VirtualTrees.AncestorVCL;
 
 type
-  TMainForm = class(TForm)
-    ActionList: TActionList;
-    ActionFileSave: TAction;
-    ActionFileLoad: TAction;
+  TNodeData = record
+    Xml: TXmlNodeItem;
+  end;
 
+  PNodeData = ^TNodeData;
+
+  TMainForm = class(TForm)
     vstContent: TVirtualStringTree;
-    mmMenu: TMainMenu;
+    sbStatus: TStatusBar;
+    popOpt: TPopupMenu;
+    miOptRnm: TMenuItem;
+    miOptDlt: TMenuItem;
+    N2: TMenuItem;
+    miOptAdAttri: TMenuItem;
+    miOptAdElem: TMenuItem;
+    miOptAdElmBfr: TMenuItem;
+    miOptAdElmAft: TMenuItem;
+    miOptAdElmCld: TMenuItem;
+    miOptAdTxt: TMenuItem;
+    miOptAdCmt: TMenuItem;
+    miOptAdCDT: TMenuItem;
+    mmMain: TMainMenu;
     mmFile: TMenuItem;
     miFileNew: TMenuItem;
     miFileOpen: TMenuItem;
@@ -27,49 +50,38 @@ type
     N1: TMenuItem;
     miFileExit: TMenuItem;
 
-    popOpt: TPopupMenu;
-    miOptRnm: TMenuItem;
-    N3: TMenuItem;
-    miOptAdElem: TMenuItem;
-    miOptAdElmBfr: TMenuItem;
-    miOptAdElmAft: TMenuItem;
-    miOptAdElmCld: TMenuItem;
-    miOptAdAttri: TMenuItem;
-    miOptAdTxt: TMenuItem;
-    miOptAdCmt: TMenuItem;
-    miOptAdCDT: TMenuItem;
-    N2: TMenuItem;
-    miOptDlt: TMenuItem;
-
-    sbStatus: TStatusBar;
-
-    FileOpenDialog: TFileOpenDialog;
-    FileSaveDialog: TFileSaveDialog;
-
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
-    procedure ActionFileSaveExecute(Sender: TObject);
-    procedure ActionFileLoadExecute(Sender: TObject);
-    procedure vstContentGetText(Sender: TBaseVirtualTree;
-      Node: PVirtualNode; Column: TColumnIndex;
-      TextType: TVSTTextType; var CellText: string);
+    procedure vstContentGetText(Sender: TBaseVirtualTree; Node: PVirtualNode;
+      Column: TColumnIndex; TextType: TVSTTextType; var CellText: string);
     procedure vstContentGetNodeDataSize(Sender: TBaseVirtualTree;
       var NodeDataSize: Integer);
-    procedure vstContentPopup(Sender: TObject);
+    procedure popOptPopup(Sender: TObject);
     procedure miOptRnmClick(Sender: TObject);
+    procedure miOptAdElmBfrClick(Sender: TObject);
+    procedure miOptAdElmAftClick(Sender: TObject);
+    procedure miOptAdElmCldClick(Sender: TObject);
+    procedure miOptAdAttriClick(Sender: TObject);
+    procedure miOptAdTxtClick(Sender: TObject);
+    procedure miOptAdCmtClick(Sender: TObject);
+    procedure miOptAdCDTClick(Sender: TObject);
+    procedure miOptDltClick(Sender: TObject);
+    procedure miFileNewClick(Sender: TObject);
     procedure miFileOpenClick(Sender: TObject);
     procedure miFileSaveClick(Sender: TObject);
+    procedure miFileSaveAsClick(Sender: TObject);
+    procedure miFileExitClick(Sender: TObject);
   private
-    FViewController: TMainViewController;
-    FLoadedFileName: string;
-
+    FController: TMainViewController;
+    FCurrentFileName: string;
+    FIsModified: Boolean;
     procedure ShowStatus(const Msg: string; AColor: TColor);
-    procedure UpdateVirtualTree;
-    procedure PopulateNode(ParentNode: PVirtualNode; XmlNode: TXmlNodeItem);
-    function GetSelectedXmlNode: TXmlNodeItem;
-
-    procedure ViewControllerOnChange(Sender: TObject);
-    procedure ViewControllerOnClear(Sender: TObject);
+    procedure InitializeTree;
+    procedure UpdateTree;
+    procedure PopulateNode(Parent: PVirtualNode; ModelNode: TXmlNodeItem);
+    function GetSelectedNode: TXmlNodeItem;
+    procedure OnChange(Sender: TObject);
+    procedure OnClear(Sender: TObject);
   end;
 
 var
@@ -80,161 +92,121 @@ implementation
 {$R *.dfm}
 
 const
-  COLOR_SUCCESS = clGreen;
-  COLOR_ERROR   = clRed;
-  COLOR_INFO    = clGray;
+  COLOR_OK = clGreen;
+  COLOR_ERR = clRed;
 
-//------------------------------------------------------------------------------
-// Form lifecycle
-//------------------------------------------------------------------------------
 procedure TMainForm.FormCreate(Sender: TObject);
 begin
-  FViewController := TMainViewController.Create;
-  FViewController.OnChange := ViewControllerOnChange;
-  FViewController.OnClear := ViewControllerOnClear;
-
-  vstContent.NodeDataSize := SizeOf(Pointer);
+  FController := TMainViewController.Create;
+  FController.OnChange := OnChange;
+  FController.OnClear := OnClear;
+  InitializeTree;
   vstContent.PopupMenu := popOpt;
-
-  vstContent.Header.Columns.Clear;
-  with vstContent.Header.Columns.Add do Text := 'Name';
-  with vstContent.Header.Columns.Add do Text := 'Value';
-
-  if sbStatus.Panels.Count = 0 then
-    sbStatus.Panels.Add;
-
-  ShowStatus('Ready.', COLOR_INFO);
+  popOpt.OnPopup := popOptPopup;
+  sbStatus.Panels.Add;
+  ShowStatus('Ready.', clGray);
+  miFileNewClick(nil);
 end;
 
-//------------------------------------------------------------------------------
 procedure TMainForm.FormDestroy(Sender: TObject);
 begin
-  FreeAndNil(FViewController);
+  FreeAndNil(FController);
 end;
 
-//------------------------------------------------------------------------------
-// File actions
-//------------------------------------------------------------------------------
-procedure TMainForm.miFileOpenClick(Sender: TObject);
+procedure TMainForm.InitializeTree;
 begin
-  if FileOpenDialog.Execute then
-  begin
-    try
-      FLoadedFileName := FileOpenDialog.FileName;
-      FViewController.LoadFromXml(FLoadedFileName);
-      ShowStatus('File loaded: ' + ExtractFileName(FLoadedFileName), COLOR_SUCCESS);
-    except
-      on E: Exception do
-        ShowStatus('Load failed: ' + E.Message, COLOR_ERROR);
-    end;
-  end;
+  vstContent.NodeDataSize := SizeOf(TNodeData);
+  vstContent.Header.Options := [hoVisible, hoColumnResize];
+  vstContent.TreeOptions.PaintOptions := [toShowHorzGridLines, toShowVertGridLines, toShowTreeLines, toShowButtons];
+  vstContent.TreeOptions.MiscOptions := [toEditable, toToggleOnDblClick, toFullRepaintOnResize, toGridExtensions];
+  vstContent.Header.Columns.Clear;
+  with vstContent.Header.Columns.Add do begin Text := 'Name'; Width := 200; end;
+  with vstContent.Header.Columns.Add do begin Text := 'Value'; Width := 400; end;
+  vstContent.OnGetText := vstContentGetText;
+  vstContent.OnGetNodeDataSize := vstContentGetNodeDataSize;
 end;
 
-//------------------------------------------------------------------------------
-procedure TMainForm.miFileSaveClick(Sender: TObject);
-begin
-  if (FLoadedFileName = '') or not FileExists(FLoadedFileName) then
-  begin
-    if not FileSaveDialog.Execute then Exit;
-    FLoadedFileName := FileSaveDialog.FileName;
-  end;
-
-  try
-    FViewController.SaveToXml(FLoadedFileName);
-    ShowStatus('Saved: ' + ExtractFileName(FLoadedFileName), COLOR_SUCCESS);
-  except
-    on E: Exception do
-      ShowStatus('Save failed: ' + E.Message, COLOR_ERROR);
-  end;
-end;
-
-//------------------------------------------------------------------------------
-// Action handlers for testing (optional)
-procedure TMainForm.ActionFileLoadExecute(Sender: TObject);
-begin
-  miFileOpenClick(Sender);
-end;
-
-//------------------------------------------------------------------------------
-procedure TMainForm.ActionFileSaveExecute(Sender: TObject);
-begin
-  miFileSaveClick(Sender);
-end;
-
-//------------------------------------------------------------------------------
-// Status bar helper
-//------------------------------------------------------------------------------
 procedure TMainForm.ShowStatus(const Msg: string; AColor: TColor);
 begin
-  sbStatus.Color := AColor;
-  sbStatus.Panels[0].Text := Msg;
+   // sbStatus.Color := AColor;
+  sbStatus.SimpleText := Msg;
 end;
 
-//------------------------------------------------------------------------------
-// Tree rendering
-//------------------------------------------------------------------------------
-procedure TMainForm.UpdateVirtualTree;
+procedure TMainForm.OnChange(Sender: TObject);
+begin
+  UpdateTree;
+  FIsModified := True;
+end;
+
+procedure TMainForm.OnClear(Sender: TObject);
+begin
+  vstContent.Clear;
+end;
+
+procedure TMainForm.UpdateTree;
 begin
   vstContent.BeginUpdate;
   try
     vstContent.Clear;
-    PopulateNode(nil, FViewController.RootNode);
+    PopulateNode(nil, FController.RootNode);
     vstContent.FullExpand;
   finally
     vstContent.EndUpdate;
   end;
 end;
 
-//------------------------------------------------------------------------------
-procedure TMainForm.PopulateNode(ParentNode: PVirtualNode;
-  XmlNode: TXmlNodeItem);
+procedure TMainForm.PopulateNode(Parent: PVirtualNode; ModelNode: TXmlNodeItem);
 var
   Node: PVirtualNode;
+  Data: PNodeData;
   Child: TXmlNodeItem;
 begin
-  Node := vstContent.AddChild(ParentNode);
-  PPointer(vstContent.GetNodeData(Node))^ := XmlNode;
-
-  if XmlNode.NodeType = ntElement then
+  Node := vstContent.AddChild(Parent);
+  Data := vstContent.GetNodeData(Node);
+  if Assigned(Data) then
+    Data^.Xml := ModelNode;
+  if ModelNode.NodeType = ntElement then
   begin
-    for Child in XmlNode.Attributes do
+    for Child in ModelNode.Attributes do
       PopulateNode(Node, Child);
-    for Child in XmlNode.Children do
+    for Child in ModelNode.Children do
       PopulateNode(Node, Child);
   end;
 end;
 
-//------------------------------------------------------------------------------
-// Tree node access
-//------------------------------------------------------------------------------
-function TMainForm.GetSelectedXmlNode: TXmlNodeItem;
+function TMainForm.GetSelectedNode: TXmlNodeItem;
+var
+  Data: PNodeData;
 begin
   if Assigned(vstContent.FocusedNode) then
-    Result := TXmlNodeItem(PPointer(vstContent.GetNodeData(vstContent.FocusedNode))^)
+  begin
+    Data := vstContent.GetNodeData(vstContent.FocusedNode);
+    if Assigned(Data) then
+      Result := Data^.Xml
+    else
+      Result := nil;
+  end
   else
     Result := nil;
 end;
 
-//------------------------------------------------------------------------------
-// VirtualTree handlers
-//------------------------------------------------------------------------------
-procedure TMainForm.vstContentGetText(Sender: TBaseVirtualTree;
-  Node: PVirtualNode; Column: TColumnIndex; TextType: TVSTTextType;
-  var CellText: string);
+procedure TMainForm.vstContentGetText(Sender: TBaseVirtualTree; Node: PVirtualNode;
+  Column: TColumnIndex; TextType: TVSTTextType; var CellText: string);
 var
+  Data: PNodeData;
   Xml: TXmlNodeItem;
 begin
-  Xml := TXmlNodeItem(PPointer(Sender.GetNodeData(Node))^);
-  if not Assigned(Xml) then Exit;
-
+  Data := Sender.GetNodeData(Node);
+  if not Assigned(Data) then Exit;
+  Xml := Data^.Xml;
   case Column of
     0:
       case Xml.NodeType of
-        ntElement: CellText := Xml.Name;
+        ntElement:   CellText := Xml.Name;
         ntAttribute: CellText := '@' + Xml.Name;
-        ntComment: CellText := '#comment';
-        ntText: CellText := '#text';
-        ntCData: CellText := '#cdata';
+        ntComment:   CellText := '#comment';
+        ntText:      CellText := '#text';
+        ntCData:     CellText := '#cdata';
       else
         CellText := Xml.Name;
       end;
@@ -242,58 +214,155 @@ begin
   end;
 end;
 
-//------------------------------------------------------------------------------
 procedure TMainForm.vstContentGetNodeDataSize(Sender: TBaseVirtualTree;
   var NodeDataSize: Integer);
 begin
-  NodeDataSize := SizeOf(Pointer);
+  NodeDataSize := SizeOf(TNodeData);
 end;
 
-//------------------------------------------------------------------------------
-// Events from controller
-//------------------------------------------------------------------------------
-procedure TMainForm.ViewControllerOnChange(Sender: TObject);
+procedure TMainForm.popOptPopup(Sender: TObject);
+var
+  Node: TXmlNodeItem;
 begin
-  UpdateVirtualTree;
-  ShowStatus('Tree updated.', COLOR_SUCCESS);
+  Node := GetSelectedNode;
+  miOptAdAttri.Enabled := Assigned(Node) and (Node.NodeType = ntElement);
+  miOptAdElmBfr.Enabled := Assigned(Node) and Node.HasParent;
+  miOptAdElmAft.Enabled := Assigned(Node) and Node.HasParent;
+  miOptAdElmCld.Enabled := Assigned(Node) and (Node.NodeType = ntElement);
+  miOptDlt.Enabled := Assigned(Node) and Node.HasParent;
+  miOptRnm.Enabled := Assigned(Node) and (Node.NodeType in [ntElement, ntAttribute]);
 end;
 
-//------------------------------------------------------------------------------
-procedure TMainForm.ViewControllerOnClear(Sender: TObject);
-begin
-  vstContent.Clear;
-  ShowStatus('Cleared.', COLOR_SUCCESS);
-end;
-
-//------------------------------------------------------------------------------
-// Rename logic
-//------------------------------------------------------------------------------
 procedure TMainForm.miOptRnmClick(Sender: TObject);
 var
   Node: TXmlNodeItem;
   NewName: string;
 begin
-  Node := GetSelectedXmlNode;
+  Node := GetSelectedNode;
   if not Assigned(Node) then Exit;
-
-  NewName := InputBox('Rename Node', 'Enter new name:', Node.Name);
+  NewName := InputBox('Rename', 'New name:', Node.Name);
   if NewName <> '' then
-  begin
-    FViewController.RenameNode(Node, NewName);
-    ShowStatus('Node renamed.', COLOR_SUCCESS);
+    FController.RenameNode(Node, NewName);
+end;
+
+procedure TMainForm.miOptAdElmBfrClick(Sender: TObject);
+begin
+  FController.InsertBefore(GetSelectedNode, ntElement, 'element', '');
+end;
+
+procedure TMainForm.miOptAdElmAftClick(Sender: TObject);
+begin
+  FController.InsertAfter(GetSelectedNode, ntElement, 'element', '');
+end;
+
+procedure TMainForm.miOptAdElmCldClick(Sender: TObject);
+begin
+  FController.AddChild(GetSelectedNode, ntElement, 'element', '');
+end;
+
+procedure TMainForm.miOptAdAttriClick(Sender: TObject);
+begin
+  FController.AddAttribute(GetSelectedNode, 'attribute', 'value');
+end;
+
+procedure TMainForm.miOptAdTxtClick(Sender: TObject);
+begin
+  FController.AddChild(GetSelectedNode, ntText, '', 'text value');
+end;
+
+procedure TMainForm.miOptAdCmtClick(Sender: TObject);
+begin
+  FController.AddChild(GetSelectedNode, ntComment, '', 'comment here');
+end;
+
+procedure TMainForm.miOptAdCDTClick(Sender: TObject);
+begin
+  FController.AddChild(GetSelectedNode, ntCData, '', 'cdata content');
+end;
+
+procedure TMainForm.miOptDltClick(Sender: TObject);
+begin
+  FController.DeleteNode(GetSelectedNode);
+end;
+
+procedure TMainForm.miFileNewClick(Sender: TObject);
+begin
+  FController.Clear;
+  FCurrentFileName := '';
+  FIsModified := True;
+  UpdateTree;
+  ShowStatus('New XML created.', COLOR_OK);
+end;
+
+procedure TMainForm.miFileOpenClick(Sender: TObject);
+var
+  Dlg: TOpenDialog;
+begin
+  Dlg := TOpenDialog.Create(nil);
+  try
+    Dlg.Filter := 'XML files (*.xml)|*.xml|All files (*.*)|*.*';
+    if Dlg.Execute then
+    begin
+      try
+        FController.LoadFromXml(Dlg.FileName);
+        FCurrentFileName := Dlg.FileName;
+        FIsModified := False;
+        UpdateTree;
+        ShowStatus('File loaded.', COLOR_OK);
+      except
+        on E: Exception do
+          ShowStatus('Error loading: ' + E.Message, COLOR_ERR);
+      end;
+    end;
+  finally
+    Dlg.Free;
   end;
 end;
 
-//------------------------------------------------------------------------------
-// Context menu filter
-//------------------------------------------------------------------------------
-procedure TMainForm.vstContentPopup(Sender: TObject);
-var
-  Node: TXmlNodeItem;
+procedure TMainForm.miFileSaveClick(Sender: TObject);
 begin
-  Node := GetSelectedXmlNode;
-  if not Assigned(Node) or (Node.NodeType <> ntElement) then
-    Abort; // Block popup for non-element nodes
+  if FCurrentFileName = '' then
+    miFileSaveAsClick(Sender)
+  else
+  begin
+    try
+      FController.SaveToXml(FCurrentFileName);
+      FIsModified := False;
+      // ShowStatus('File saved.', COLOR_OK);
+    except
+      on E: Exception do
+        // ShowStatus('Error saving: ' + E.Message, COLOR_ERR);
+    end;
+  end;
+end;
+
+procedure TMainForm.miFileSaveAsClick(Sender: TObject);
+var
+  Dlg: TSaveDialog;
+begin
+  Dlg := TSaveDialog.Create(Self);
+  try
+    Dlg.Filter := 'XML files (*.xml)|*.xml|All files (*.*)|*.*';
+    Dlg.DefaultExt := '.xml';
+    Dlg.Title := 'Save XML File As';
+
+    if Dlg.Execute then
+    begin
+      FController.SaveToXml(Dlg.FileName);
+      FCurrentFileName := Dlg.FileName;
+      FIsModified := False;
+      ShowStatus('File saved.', COLOR_OK);
+    end;
+  finally
+    Dlg.Free;
+  end;
+end;
+
+
+procedure TMainForm.miFileExitClick(Sender: TObject);
+begin
+  Close;
 end;
 
 end.
+

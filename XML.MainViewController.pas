@@ -106,8 +106,11 @@ end;
 procedure TMainViewController.Clear;
 begin
   DoClear;
-  FRootNode.Children.Clear;
-  FRootNode.Attributes.Clear;
+  FreeAndNil(FRootNode);
+
+  FRootNode := TXmlNodeItem.Create(ntElement);
+  FRootNode.Name := 'root';
+
   DoChange;
 end;
 
@@ -150,8 +153,6 @@ begin
 
   if AParent.NodeType = ntElement then
     AParent.Children.Add(Result);
-
-  DoChange;
 end;
 
 //------------------------------------------------------------------------------
@@ -270,16 +271,12 @@ var
   end;
 
 begin
-  Doc := CoFreeThreadedDOMDocument40.Create;
+  Doc := CoDOMDocument60.Create;
   if Doc.load(AFilename) then
   begin
     Clear;
-    FRootNode.Name := Doc.documentElement.nodeName;
-    for var i := 0 to Doc.documentElement.childNodes.length - 1 do
-    begin
-      if Doc.documentElement.childNodes.item[i].nodeType = NODE_ELEMENT then
-        FRootNode.Children.Add(CreateNode(Doc.documentElement.childNodes.item[i]));
-    end;
+    FreeAndNil(FRootNode);
+    FRootNode := CreateNode(Doc.documentElement);
     DoChange;
   end;
 end;
@@ -315,10 +312,17 @@ var
     end;
   end;
 
+var
+  RootElement: IXMLDOMElement;
 begin
-  Doc := CoFreeThreadedDOMDocument40.Create;
-  Doc.loadXML(Format('<?xml version="1.0" encoding="UTF-8"?><%s/>', [FRootNode.Name]));
-  SaveNode(FRootNode, Doc.documentElement);
+  Doc := CoDOMDocument60.Create;
+  Doc.async := False;
+  Doc.validateOnParse := False;
+
+  RootElement := Doc.createElement(FRootNode.Name);
+  Doc.appendChild(RootElement);
+
+  SaveNode(FRootNode, RootElement);
   Doc.save(AFilename);
 end;
 
