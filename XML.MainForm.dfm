@@ -36,6 +36,7 @@ object MainForm: TMainForm
     Width = 624
     Height = 19
     Panels = <>
+    SimplePanel = True
     ExplicitTop = 422
   end
   object popOpt: TPopupMenu

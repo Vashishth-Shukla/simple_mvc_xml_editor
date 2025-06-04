@@ -3,21 +3,10 @@ unit XML.MainForm;
 interface
 
 uses
-  System.SysUtils,
-  System.Classes,
-  Vcl.Graphics,
-  Vcl.Controls,
-  Vcl.Forms,
-  Vcl.Dialogs,
-  Vcl.Menus,
-  Vcl.ComCtrls,
-  VirtualTrees,
-  VirtualTrees.Types,
-  XML.MainViewController,
-  XML.MainModel,
-  VirtualTrees.BaseAncestorVCL,
-  VirtualTrees.BaseTree,
-  VirtualTrees.AncestorVCL;
+  System.SysUtils, System.Classes, Vcl.Graphics, Vcl.Controls, Vcl.Forms,
+  Vcl.Dialogs, Vcl.Menus, Vcl.ComCtrls, VirtualTrees, VirtualTrees.Types,
+  XML.MainViewController, XML.MainModel, VirtualTrees.BaseAncestorVCL,
+  VirtualTrees.BaseTree, VirtualTrees.AncestorVCL;
 
 type
   TNodeData = record
@@ -75,13 +64,10 @@ type
     FController: TMainViewController;
     FCurrentFileName: string;
     FIsModified: Boolean;
-    procedure ShowStatus(const Msg: string; AColor: TColor);
     procedure InitializeTree;
     procedure UpdateTree;
     procedure PopulateNode(Parent: PVirtualNode; ModelNode: TXmlNodeItem);
     function GetSelectedNode: TXmlNodeItem;
-    procedure OnChange(Sender: TObject);
-    procedure OnClear(Sender: TObject);
   end;
 
 var
@@ -91,20 +77,13 @@ implementation
 
 {$R *.dfm}
 
-const
-  COLOR_OK = clGreen;
-  COLOR_ERR = clRed;
-
 procedure TMainForm.FormCreate(Sender: TObject);
 begin
   FController := TMainViewController.Create;
-  FController.OnChange := OnChange;
-  FController.OnClear := OnClear;
   InitializeTree;
   vstContent.PopupMenu := popOpt;
   popOpt.OnPopup := popOptPopup;
-  sbStatus.Panels.Add;
-  ShowStatus('Ready.', clGray);
+  sbStatus.SimpleText := 'test1';
   miFileNewClick(nil);
 end;
 
@@ -124,23 +103,6 @@ begin
   with vstContent.Header.Columns.Add do begin Text := 'Value'; Width := 400; end;
   vstContent.OnGetText := vstContentGetText;
   vstContent.OnGetNodeDataSize := vstContentGetNodeDataSize;
-end;
-
-procedure TMainForm.ShowStatus(const Msg: string; AColor: TColor);
-begin
-   // sbStatus.Color := AColor;
-  sbStatus.SimpleText := Msg;
-end;
-
-procedure TMainForm.OnChange(Sender: TObject);
-begin
-  UpdateTree;
-  FIsModified := True;
-end;
-
-procedure TMainForm.OnClear(Sender: TObject);
-begin
-  vstContent.Clear;
 end;
 
 procedure TMainForm.UpdateTree;
@@ -167,8 +129,6 @@ begin
     Data^.Xml := ModelNode;
   if ModelNode.NodeType = ntElement then
   begin
-    for Child in ModelNode.Attributes do
-      PopulateNode(Node, Child);
     for Child in ModelNode.Children do
       PopulateNode(Node, Child);
   end;
@@ -225,12 +185,16 @@ var
   Node: TXmlNodeItem;
 begin
   Node := GetSelectedNode;
-  miOptAdAttri.Enabled := Assigned(Node) and (Node.NodeType = ntElement);
+  miOptRnm.Enabled      := Assigned(Node) and (Node.NodeType in [ntElement, ntAttribute]);
+  miOptAdElem.Enabled   := Assigned(Node) and (Node.NodeType = ntElement);
   miOptAdElmBfr.Enabled := Assigned(Node) and Node.HasParent;
   miOptAdElmAft.Enabled := Assigned(Node) and Node.HasParent;
   miOptAdElmCld.Enabled := Assigned(Node) and (Node.NodeType = ntElement);
-  miOptDlt.Enabled := Assigned(Node) and Node.HasParent;
-  miOptRnm.Enabled := Assigned(Node) and (Node.NodeType in [ntElement, ntAttribute]);
+  miOptAdAttri.Enabled  := Assigned(Node) and (Node.NodeType = ntElement);
+  miOptAdTxt.Enabled    := Assigned(Node) and (Node.NodeType = ntElement);
+  miOptAdCmt.Enabled    := Assigned(Node) and (Node.NodeType = ntElement);
+  miOptAdCDT.Enabled    := Assigned(Node) and (Node.NodeType = ntElement);
+  miOptDlt.Enabled      := Assigned(Node);
 end;
 
 procedure TMainForm.miOptRnmClick(Sender: TObject);
@@ -243,46 +207,55 @@ begin
   NewName := InputBox('Rename', 'New name:', Node.Name);
   if NewName <> '' then
     FController.RenameNode(Node, NewName);
+  UpdateTree;
 end;
 
 procedure TMainForm.miOptAdElmBfrClick(Sender: TObject);
 begin
   FController.InsertBefore(GetSelectedNode, ntElement, 'element', '');
+  UpdateTree;
 end;
 
 procedure TMainForm.miOptAdElmAftClick(Sender: TObject);
 begin
   FController.InsertAfter(GetSelectedNode, ntElement, 'element', '');
+  UpdateTree;
 end;
 
 procedure TMainForm.miOptAdElmCldClick(Sender: TObject);
 begin
   FController.AddChild(GetSelectedNode, ntElement, 'element', '');
+  UpdateTree;
 end;
 
 procedure TMainForm.miOptAdAttriClick(Sender: TObject);
 begin
   FController.AddAttribute(GetSelectedNode, 'attribute', 'value');
+  UpdateTree;
 end;
 
 procedure TMainForm.miOptAdTxtClick(Sender: TObject);
 begin
   FController.AddChild(GetSelectedNode, ntText, '', 'text value');
+  UpdateTree;
 end;
 
 procedure TMainForm.miOptAdCmtClick(Sender: TObject);
 begin
   FController.AddChild(GetSelectedNode, ntComment, '', 'comment here');
+  UpdateTree;
 end;
 
 procedure TMainForm.miOptAdCDTClick(Sender: TObject);
 begin
   FController.AddChild(GetSelectedNode, ntCData, '', 'cdata content');
+  UpdateTree;
 end;
 
 procedure TMainForm.miOptDltClick(Sender: TObject);
 begin
   FController.DeleteNode(GetSelectedNode);
+  UpdateTree;
 end;
 
 procedure TMainForm.miFileNewClick(Sender: TObject);
@@ -291,7 +264,6 @@ begin
   FCurrentFileName := '';
   FIsModified := True;
   UpdateTree;
-  ShowStatus('New XML created.', COLOR_OK);
 end;
 
 procedure TMainForm.miFileOpenClick(Sender: TObject);
@@ -308,10 +280,9 @@ begin
         FCurrentFileName := Dlg.FileName;
         FIsModified := False;
         UpdateTree;
-        ShowStatus('File loaded.', COLOR_OK);
       except
         on E: Exception do
-          ShowStatus('Error loading: ' + E.Message, COLOR_ERR);
+          ShowMessage('Error loading: ' + E.Message);
       end;
     end;
   finally
@@ -328,10 +299,9 @@ begin
     try
       FController.SaveToXml(FCurrentFileName);
       FIsModified := False;
-      // ShowStatus('File saved.', COLOR_OK);
     except
       on E: Exception do
-        // ShowStatus('Error saving: ' + E.Message, COLOR_ERR);
+        ShowMessage('Error saving: ' + E.Message);
     end;
   end;
 end;
@@ -351,13 +321,11 @@ begin
       FController.SaveToXml(Dlg.FileName);
       FCurrentFileName := Dlg.FileName;
       FIsModified := False;
-      ShowStatus('File saved.', COLOR_OK);
     end;
   finally
     Dlg.Free;
   end;
 end;
-
 
 procedure TMainForm.miFileExitClick(Sender: TObject);
 begin
