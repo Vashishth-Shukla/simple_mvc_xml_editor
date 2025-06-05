@@ -28,7 +28,6 @@ object MainForm: TMainForm
     TabOrder = 0
     Touch.InteractiveGestures = [igPan, igPressAndTap]
     Touch.InteractiveGestureOptions = [igoPanSingleFingerHorizontal, igoPanSingleFingerVertical, igoPanInertia, igoPanGutter, igoParentPassthrough]
-    ExplicitHeight = 422
     Columns = <>
   end
   object sbStatus: TStatusBar
@@ -38,7 +37,6 @@ object MainForm: TMainForm
     Height = 19
     Panels = <>
     SimplePanel = True
-    ExplicitTop = 422
   end
   object popOpt: TPopupMenu
     Top = 72

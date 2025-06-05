@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bookstore>
+  <book genre="fantasy">
+    <title>Eragon</title>
+    <author>Christopher Paolini</author>
+    <price>12.99</price>
+    <!-- Best-selling fantasy novel -->
+  </book>
+  <book genre="sci-fi">
+    <title>Dune</title>
+    <author>Frank Herbert</author>
+    <price><![CDATA[9.99]]></price>
+  </book>
+</bookstore>

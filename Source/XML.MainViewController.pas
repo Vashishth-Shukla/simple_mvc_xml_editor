@@ -216,6 +216,7 @@ end;
 procedure TMainViewController.LoadFromXml(const Filename: string);
 var
   Doc: IXMLDOMDocument;
+  PI: IXMLDOMProcessingInstruction;
 
   function CreateNode(XMLNode: IXMLDOMNode): TXmlNodeItem;
   var
@@ -269,6 +270,7 @@ begin
   FRootNode := CreateNode(Doc.documentElement);
 end;
 
+//------------------------------------------------------------------------------
 procedure TMainViewController.SaveToXml(const Filename: string);
 var
   Doc: IXMLDOMDocument;
@@ -306,10 +308,14 @@ var
 
 var
   RootElem: IXMLDOMElement;
+  PI:  IXMLDOMProcessingInstruction;
 begin
   Doc := CoDOMDocument60.Create;
   Doc.async := False;
   Doc.validateOnParse := False;
+
+  PI := Doc.createProcessingInstruction('xml', 'version="1.0" encoding="UTF-8"');
+  Doc.appendChild(PI as IXMLDOMNode);
 
   RootElem := Doc.createElement(FRootNode.Name);
   Doc.appendChild(RootElem);
