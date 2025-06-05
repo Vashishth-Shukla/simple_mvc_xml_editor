@@ -3,22 +3,44 @@ unit XML.MainForm;
 interface
 
 uses
-  System.SysUtils, System.Classes, Vcl.Graphics, Vcl.Controls, Vcl.Forms,
-  Vcl.Dialogs, Vcl.Menus, Vcl.ComCtrls, VirtualTrees, VirtualTrees.Types,
-  XML.MainViewController, XML.MainModel, VirtualTrees.BaseAncestorVCL,
-  VirtualTrees.BaseTree, VirtualTrees.AncestorVCL;
+  System.SysUtils,
+  System.Classes,
+  Vcl.Graphics,
+  Vcl.Controls,
+  Vcl.Forms,
+  Vcl.Dialogs,
+  Vcl.Menus,
+  Vcl.ComCtrls,
+
+  VirtualTrees,
+  VirtualTrees.Types,
+  VirtualTrees.BaseAncestorVCL,
+  VirtualTrees.BaseTree,
+  VirtualTrees.AncestorVCL,
+
+  XML.MainViewController,
+  XML.MainModel;
 
 type
+  ///<summary>
+  /// Struktur zur Darstellung der benutzerdefinierten Knotendaten im VirtualStringTree.
+  ///</summary>
   TNodeData = record
     Xml: TXmlNodeItem;
   end;
 
   PNodeData = ^TNodeData;
 
+  ///<summary>
+  /// Hauptformular der XML-Editor-Anwendung.
+  ///</summary>
   TMainForm = class(TForm)
     vstContent: TVirtualStringTree;
+
     sbStatus: TStatusBar;
+
     popOpt: TPopupMenu;
+
     miOptRnm: TMenuItem;
     miOptDlt: TMenuItem;
     N2: TMenuItem;
@@ -30,6 +52,7 @@ type
     miOptAdTxt: TMenuItem;
     miOptAdCmt: TMenuItem;
     miOptAdCDT: TMenuItem;
+
     mmMain: TMainMenu;
     mmFile: TMenuItem;
     miFileNew: TMenuItem;
@@ -39,16 +62,32 @@ type
     N1: TMenuItem;
     miFileExit: TMenuItem;
 
+//------------------------------------------------------------------------------
+//                               Form Lifecycle
+//------------------------------------------------------------------------------
+
     procedure FormCreate(Sender: TObject);
     procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
     procedure FormDestroy(Sender: TObject);
+
+//------------------------------------------------------------------------------
+//                           VirtualStringTree Events
+//------------------------------------------------------------------------------
+
     procedure vstContentGetText(Sender: TBaseVirtualTree; Node: PVirtualNode;
       Column: TColumnIndex; TextType: TVSTTextType; var CellText: string);
     procedure vstContentGetNodeDataSize(Sender: TBaseVirtualTree;
       var NodeDataSize: Integer);
-    procedure vstContentEditing(Sender: TBaseVirtualTree; Node: PVirtualNode; Column: TColumnIndex; var Allowed: Boolean);
-    procedure vstContentNewText(Sender: TBaseVirtualTree; Node: PVirtualNode; Column: TColumnIndex; NewText: string);
+    procedure vstContentEditing(Sender: TBaseVirtualTree; Node: PVirtualNode;
+      Column: TColumnIndex; var Allowed: Boolean);
+    procedure vstContentNewText(Sender: TBaseVirtualTree; Node: PVirtualNode;
+      Column: TColumnIndex; NewText: string);
     procedure vstContentDblClick(Sender: TObject);
+
+//------------------------------------------------------------------------------
+//                           Popup Menu (Node Operations)
+//------------------------------------------------------------------------------
+
     procedure popOptPopup(Sender: TObject);
     procedure miOptRnmClick(Sender: TObject);
     procedure miOptAdElmBfrClick(Sender: TObject);
@@ -59,19 +98,34 @@ type
     procedure miOptAdCmtClick(Sender: TObject);
     procedure miOptAdCDTClick(Sender: TObject);
     procedure miOptDltClick(Sender: TObject);
+
+//------------------------------------------------------------------------------
+//                                Main Menu (File)
+//------------------------------------------------------------------------------
+
     procedure miFileNewClick(Sender: TObject);
     procedure miFileOpenClick(Sender: TObject);
     procedure miFileSaveClick(Sender: TObject);
     procedure miFileSaveAsClick(Sender: TObject);
     procedure miFileExitClick(Sender: TObject);
+
   private
     FController: TMainViewController;
     FCurrentFileName: string;
     FIsModified: Boolean;
+
+//------------------------------------------------------------------------------
+//                             Tree Initialization
+//------------------------------------------------------------------------------
+    ///<summary>Initialisiert die Baumansicht.</summary>
     procedure InitializeTree;
+    ///<summary>Aktualisiert den Baum auf Basis des Models.</summary>
     procedure UpdateTree;
+    ///<summary>Rekursive Funktion zur Befüllung des Baums mit XML-Knoten.</summary>
     procedure PopulateNode(Parent: PVirtualNode; ModelNode: TXmlNodeItem);
+    ///<summary>Gibt den aktuell ausgewählten Knoten im Model zurück.</summary>
     function GetSelectedNode: TXmlNodeItem;
+    ///<summary>Fragt, ob Änderungen verworfen werden dürfen.</summary>
     function ConfirmDiscardChanges: Boolean;
   end;
 
@@ -82,7 +136,9 @@ implementation
 
 {$R *.dfm}
 
-
+//------------------------------------------------------------------------------
+//                               Form Lifecycle
+//------------------------------------------------------------------------------
 procedure TMainForm.FormCreate(Sender: TObject);
 begin
   sbStatus.SimplePanel := True;
@@ -96,36 +152,46 @@ begin
   miFileNewClick(nil);
 end;
 
+//------------------------------------------------------------------------------
 procedure TMainForm.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
 begin
   CanClose := ConfirmDiscardChanges;
 end;
 
+//------------------------------------------------------------------------------
 procedure TMainForm.FormDestroy(Sender: TObject);
 begin
   FreeAndNil(FController);
 end;
 
-// add further logic ... yes no what ... possibly distroy the nodes here once chosen ... more logic
+//------------------------------------------------------------------------------
 function TMainForm.ConfirmDiscardChanges: Boolean;
 begin
   Result := True;
   if FIsModified then
-    Result := MessageDlg('You have unsaved changes. Do you want to discard them?', mtConfirmation, [mbYes, mbNo], 0) = mrYes;
+    Result := MessageDlg('You have unsaved changes. Do you want to discard them?',
+      mtConfirmation, [mbYes, mbNo], 0) = mrYes;
 end;
 
+//------------------------------------------------------------------------------
 procedure TMainForm.InitializeTree;
 begin
   vstContent.NodeDataSize := SizeOf(TNodeData);
   vstContent.Header.Options := [hoVisible, hoColumnResize];
-  vstContent.TreeOptions.PaintOptions := [toShowHorzGridLines, toShowVertGridLines, toShowTreeLines, toShowButtons];
-  vstContent.TreeOptions.MiscOptions := [toEditable, toToggleOnDblClick, toFullRepaintOnResize, toGridExtensions];
+  vstContent.TreeOptions.PaintOptions := [toShowHorzGridLines, toShowVertGridLines,
+    toShowTreeLines, toShowButtons];
+  vstContent.TreeOptions.MiscOptions := [toEditable, toToggleOnDblClick,
+    toFullRepaintOnResize, toGridExtensions];
   vstContent.Header.Columns.Clear;
   with vstContent.Header.Columns.Add do begin Text := 'Name'; Width := 200; end;
   with vstContent.Header.Columns.Add do begin Text := 'Value'; Width := 400; end;
   vstContent.OnGetText := vstContentGetText;
   vstContent.OnGetNodeDataSize := vstContentGetNodeDataSize;
 end;
+
+//------------------------------------------------------------------------------
+//                             Tree Initialization
+//------------------------------------------------------------------------------
 
 procedure TMainForm.UpdateTree;
 begin
@@ -137,9 +203,11 @@ begin
     vstContent.FullExpand;
   finally
     vstContent.EndUpdate;
+    FIsModified := True;
   end;
 end;
 
+//------------------------------------------------------------------------------
 procedure TMainForm.PopulateNode(Parent: PVirtualNode; ModelNode: TXmlNodeItem);
 var
   Node: PVirtualNode;
@@ -160,6 +228,7 @@ begin
   end;
 end;
 
+//------------------------------------------------------------------------------
 function TMainForm.GetSelectedNode: TXmlNodeItem;
 var
   Data: PNodeData;
@@ -176,6 +245,7 @@ begin
     Result := nil;
 end;
 
+//------------------------------------------------------------------------------
 procedure TMainForm.vstContentGetText(Sender: TBaseVirtualTree; Node: PVirtualNode;
   Column: TColumnIndex; TextType: TVSTTextType; var CellText: string);
 var
@@ -200,18 +270,26 @@ begin
   end;
 end;
 
+//------------------------------------------------------------------------------
+//                           VirtualStringTree Events
+//------------------------------------------------------------------------------
+
 procedure TMainForm.vstContentGetNodeDataSize(Sender: TBaseVirtualTree;
   var NodeDataSize: Integer);
 begin
   NodeDataSize := SizeOf(TNodeData);
 end;
 
-procedure TMainForm.vstContentEditing(Sender: TBaseVirtualTree; Node: PVirtualNode; Column: TColumnIndex; var Allowed: Boolean);
+//------------------------------------------------------------------------------
+procedure TMainForm.vstContentEditing(Sender: TBaseVirtualTree; Node: PVirtualNode;
+  Column: TColumnIndex; var Allowed: Boolean);
 begin
   Allowed := Column = 1;
 end;
 
-procedure TMainForm.vstContentNewText(Sender: TBaseVirtualTree; Node: PVirtualNode; Column: TColumnIndex; NewText: string);
+//------------------------------------------------------------------------------
+procedure TMainForm.vstContentNewText(Sender: TBaseVirtualTree; Node: PVirtualNode;
+  Column: TColumnIndex; NewText: string);
 var
   Data: PNodeData;
 begin
@@ -230,7 +308,7 @@ begin
   end;
 end;
 
-
+//------------------------------------------------------------------------------
 procedure TMainForm.vstContentDblClick(Sender: TObject);
 var
   Node: TXmlNodeItem;
@@ -241,6 +319,10 @@ begin
     vstContent.EditNode(vstContent.FocusedNode, 1);
 
 end;
+
+//------------------------------------------------------------------------------
+//                                Popup Menu
+//------------------------------------------------------------------------------
 
 procedure TMainForm.popOptPopup(Sender: TObject);
 var
@@ -262,6 +344,7 @@ begin
   miOptDlt.Enabled     := Assigned(Node) and Node.HasParent;
 end;
 
+//------------------------------------------------------------------------------
 procedure TMainForm.miOptRnmClick(Sender: TObject);
 var
   Node: TXmlNodeItem;
@@ -276,7 +359,7 @@ begin
   sbStatus.SimpleText := 'Node renamed.';
 end;
 
-
+//------------------------------------------------------------------------------
 procedure TMainForm.miOptAdElmBfrClick(Sender: TObject);
 var
   NodeName : string;
@@ -288,6 +371,7 @@ begin
   sbStatus.SimpleText := 'Element inserted before.';
 end;
 
+//------------------------------------------------------------------------------
 procedure TMainForm.miOptAdElmAftClick(Sender: TObject);
 var
   NodeName : string;
@@ -299,7 +383,7 @@ begin
   sbStatus.SimpleText := 'Element inserted after.';
 end;
 
-
+//------------------------------------------------------------------------------
 procedure TMainForm.miOptAdElmCldClick(Sender: TObject);
 var
   NodeName : string;
@@ -311,7 +395,7 @@ begin
   sbStatus.SimpleText := 'Child element added.';
 end;
 
-
+//------------------------------------------------------------------------------
 procedure TMainForm.miOptAdAttriClick(Sender: TObject);
 var
   AttriName : string;
@@ -325,6 +409,7 @@ begin
   sbStatus.SimpleText := 'Attribute added.';
 end;
 
+//------------------------------------------------------------------------------
 procedure TMainForm.miOptAdTxtClick(Sender: TObject);
 var
   NodeValue : string;
@@ -336,6 +421,7 @@ begin
   sbStatus.SimpleText := 'Text node added.';
 end;
 
+//------------------------------------------------------------------------------
 procedure TMainForm.miOptAdCmtClick(Sender: TObject);
 var
   NodeValue : string;
@@ -347,6 +433,7 @@ begin
   sbStatus.SimpleText := 'Comment node added.';
 end;
 
+//------------------------------------------------------------------------------
 procedure TMainForm.miOptAdCDTClick(Sender: TObject);
 var
   NodeValue : string;
@@ -358,6 +445,7 @@ begin
   sbStatus.SimpleText := 'CDATA node added.';
 end;
 
+//------------------------------------------------------------------------------
 procedure TMainForm.miOptDltClick(Sender: TObject);
 begin
   FController.DeleteNode(GetSelectedNode);
@@ -365,17 +453,21 @@ begin
   sbStatus.SimpleText := 'Node deleted.';
 end;
 
-// check if old is gone ... and new is created
+//------------------------------------------------------------------------------
+//                                Main Menu (File)
+//------------------------------------------------------------------------------
+
 procedure TMainForm.miFileNewClick(Sender: TObject);
 begin
   if not ConfirmDiscardChanges then Exit;
   FController.Clear;
   FCurrentFileName := '';
-  FIsModified := True;
   UpdateTree;
+  FIsModified := False;
   sbStatus.SimpleText := 'New XML created.';
 end;
 
+//------------------------------------------------------------------------------
 procedure TMainForm.miFileOpenClick(Sender: TObject);
 var
   Dlg: TOpenDialog;
@@ -389,8 +481,8 @@ begin
       try
         FController.LoadFromXml(Dlg.FileName);
         FCurrentFileName := Dlg.FileName;
-        FIsModified := False;
         UpdateTree;
+        FIsModified := False;
         sbStatus.SimpleText := 'File loaded.';
       except
         on E: Exception do
@@ -402,6 +494,7 @@ begin
   end;
 end;
 
+//------------------------------------------------------------------------------
 procedure TMainForm.miFileSaveClick(Sender: TObject);
 begin
   if FCurrentFileName = '' then
@@ -419,6 +512,7 @@ begin
   end;
 end;
 
+//------------------------------------------------------------------------------
 procedure TMainForm.miFileSaveAsClick(Sender: TObject);
 var
   Dlg: TSaveDialog;
@@ -442,6 +536,7 @@ begin
   end;
 end;
 
+//------------------------------------------------------------------------------
 procedure TMainForm.miFileExitClick(Sender: TObject);
 begin
   Close;

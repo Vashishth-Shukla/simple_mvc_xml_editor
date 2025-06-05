@@ -3,34 +3,106 @@ unit XML.MainViewController;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections,
+  System.SysUtils,
+  System.Classes,
+  System.Generics.Collections,
+
   XML.MainModel;
 
 type
+  ///<summary>
+  /// Die zentrale Steuerungsklasse für die XML-Editor-Oberfläche.
+  /// Verwaltet das XML-Datenmodell (RootNode) und bietet Operationen
+  /// zur Bearbeitung und Persistenz.
+  ///</summary>
   TMainViewController = class
   private
+    ///<summary>Wurzelelement des aktuellen XML-Dokuments.</summary>
     FRootNode: TXmlNodeItem;
   public
+    ///<summary>Initialisiert die View-Controller-Instanz und erzeugt einen leeren Root-Knoten.</summary>
     constructor Create;
+
+    ///<summary>Gibt belegte Ressourcen frei.</summary>
     destructor Destroy; override;
 
+    ///<summary>Löscht das aktuelle XML-Modell und erzeugt einen neuen leeren Root-Knoten.</summary>
     procedure Clear;
+
+    ///<summary>
+    /// Fügt einem XML-Knoten ein neues Kind hinzu.
+    ///</summary>
+    ///<param name="AParent">Das Elternelement, zu dem das Kind hinzugefügt wird.</param>
+    ///<param name="AType">Typ des neuen Knotens (Element, Text, Kommentar etc.).</param>
+    ///<param name="AName">Name des neuen Knotens.</param>
+    ///<param name="AValue">Wert des neuen Knotens (sofern zutreffend).</param>
+    ///<returns>Der neu hinzugefügte Knoten.</returns>
     function AddChild(AParent: TXmlNodeItem; AType: TXmlNodeType; const AName, AValue: string): TXmlNodeItem;
+
+    ///<summary>
+    /// Fügt einem Elementknoten ein neues Attribut hinzu.
+    ///</summary>
+    ///<param name="AParent">Das Ziel-Element, dem das Attribut hinzugefügt wird.</param>
+    ///<param name="AName">Name des Attributs.</param>
+    ///<param name="AValue">Wert des Attributs.</param>
+    ///<returns>Das neu erstellte Attribut als Knoten.</returns>
     function AddAttribute(AParent: TXmlNodeItem; const AName, AValue: string): TXmlNodeItem;
+
+    ///<summary>Entfernt den angegebenen Knoten aus dem XML-Modell.</summary>
+    ///<param name="ANode">Der zu entfernende Knoten.</param>
     procedure DeleteNode(ANode: TXmlNodeItem);
+
+    ///<summary>Ändert den Namen eines Elements oder Attributs.</summary>
+    ///<param name="ANode">Der umzubenennende Knoten.</param>
+    ///<param name="ANewName">Der neue Name.</param>
     procedure RenameNode(ANode: TXmlNodeItem; const ANewName: string);
+
+    ///<summary>Setzt den Wert eines Text-, Kommentar-, CDATA- oder Attribut-Knotens.</summary>
+    ///<param name="ANode">Der Zielknoten.</param>
+    ///<param name="ANewValue">Der neue Wert.</param>
     procedure SetNodeValue(ANode: TXmlNodeItem; const ANewValue: string);
-    procedure InsertBefore(ANode: TXmlNodeItem; AType: TXmlNodeType; const AName, AValue: string);
-    procedure InsertAfter(ANode: TXmlNodeItem; AType: TXmlNodeType; const AName, AValue: string);
+
+    ///<summary>
+    /// Fügt ein neues Element vor einem existierenden Knoten ein.
+    ///</summary>
+    ///<param name="ANode">Der Referenzknoten, vor dem eingefügt wird.</param>
+    ///<param name="AType">Typ des neuen Knotens.</param>
+    ///<param name="AName">Name des neuen Knotens.</param>
+    ///<param name="AValue">Wert des neuen Knotens.</param>
+    procedure InsertBefore(ANode: TXmlNodeItem; AType: TXmlNodeType;
+      const AName, AValue: string);
+
+    ///<summary>
+    /// Fügt ein neues Element nach einem existierenden Knoten ein.
+    ///</summary>
+    ///<param name="ANode">Der Referenzknoten, nach dem eingefügt wird.</param>
+    ///<param name="AType">Typ des neuen Knotens.</param>
+    ///<param name="AName">Name des neuen Knotens.</param>
+    ///<param name="AValue">Wert des neuen Knotens.</param>
+    procedure InsertAfter(ANode: TXmlNodeItem; AType: TXmlNodeType;
+      const AName, AValue: string);
+
+    ///<summary>Lädt ein XML-Dokument von einer Datei und erstellt das entsprechende Modell.</summary>
+    ///<param name="Filename">Pfad zur XML-Datei.</param>
     procedure LoadFromXml(const Filename: string);
+
+    ///<summary>Speichert das aktuelle XML-Modell in eine Datei.</summary>
+    ///<param name="Filename">Zielpfad für die XML-Datei.</param>
     procedure SaveToXml(const Filename: string);
+
+    ///<summary>Der aktuelle Root-Knoten des XML-Dokuments.</summary>
     property RootNode: TXmlNodeItem read FRootNode;
   end;
+
 
 implementation
 
 uses
   Winapi.msxml;
+
+//------------------------------------------------------------------------------
+//                            Constructor / Destructor
+//------------------------------------------------------------------------------
 
 constructor TMainViewController.Create;
 begin
@@ -38,12 +110,14 @@ begin
   Clear;
 end;
 
+//------------------------------------------------------------------------------
 destructor TMainViewController.Destroy;
 begin
   FRootNode.Free;
   inherited;
 end;
 
+//------------------------------------------------------------------------------
 procedure TMainViewController.Clear;
 begin
   FRootNode.Free;
@@ -51,7 +125,12 @@ begin
   FRootNode.Name := 'root';
 end;
 
-function TMainViewController.AddChild(AParent: TXmlNodeItem; AType: TXmlNodeType; const AName, AValue: string): TXmlNodeItem;
+//------------------------------------------------------------------------------
+//                          Node Creation & Modification
+//------------------------------------------------------------------------------
+
+function TMainViewController.AddChild(AParent: TXmlNodeItem; AType: TXmlNodeType;
+  const AName, AValue: string): TXmlNodeItem;
 begin
   Result := TXmlNodeItem.Create(AType);
   Result.Parent := AParent;
@@ -64,31 +143,37 @@ begin
     AParent.Children.Add(Result);
 end;
 
-function TMainViewController.AddAttribute(AParent: TXmlNodeItem; const AName, AValue: string): TXmlNodeItem;
+//------------------------------------------------------------------------------
+function TMainViewController.AddAttribute(AParent: TXmlNodeItem; const AName,
+  AValue: string): TXmlNodeItem;
 begin
   Result := AddChild(AParent, ntAttribute, AName, AValue);
 end;
 
-// you cannot delete the root but rename it
+//------------------------------------------------------------------------------
 procedure TMainViewController.DeleteNode(ANode: TXmlNodeItem);
 begin
   if Assigned(ANode) and Assigned(ANode.Parent) then
     ANode.Parent.Children.Remove(ANode);
 end;
 
+//------------------------------------------------------------------------------
 procedure TMainViewController.RenameNode(ANode: TXmlNodeItem; const ANewName: string);
 begin
   if Assigned(ANode) and (ANode.NodeType in [ntElement, ntAttribute]) then
     ANode.Name := ANewName;
 end;
 
+//------------------------------------------------------------------------------
 procedure TMainViewController.SetNodeValue(ANode: TXmlNodeItem; const ANewValue: string);
 begin
   if Assigned(ANode) and (ANode.NodeType <> ntElement) then
     ANode.Value := ANewValue;
 end;
 
-procedure TMainViewController.InsertBefore(ANode: TXmlNodeItem; AType: TXmlNodeType; const AName, AValue: string);
+//------------------------------------------------------------------------------
+procedure TMainViewController.InsertBefore(ANode: TXmlNodeItem; AType: TXmlNodeType;
+  const AName, AValue: string);
 var
   Index: Integer;
   NewNode: TXmlNodeItem;
@@ -105,7 +190,9 @@ begin
   ANode.Parent.Children.Insert(Index, NewNode);
 end;
 
-procedure TMainViewController.InsertAfter(ANode: TXmlNodeItem; AType: TXmlNodeType; const AName, AValue: string);
+//------------------------------------------------------------------------------
+procedure TMainViewController.InsertAfter(ANode: TXmlNodeItem; AType: TXmlNodeType;
+  const AName, AValue: string);
 var
   Index: Integer;
   NewNode: TXmlNodeItem;
@@ -121,6 +208,10 @@ begin
     NewNode.Value := AValue;
   ANode.Parent.Children.Insert(Index + 1, NewNode);
 end;
+
+//------------------------------------------------------------------------------
+//                            File I/O (XML Persistence)
+//------------------------------------------------------------------------------
 
 procedure TMainViewController.LoadFromXml(const Filename: string);
 var
@@ -201,7 +292,7 @@ var
           begin
             NewElem := Doc.createElement(Child.Name);
             Parent.appendChild(NewElem);
-            SaveNode(Child, NewElem); // Recurse
+            SaveNode(Child, NewElem);
           end;
         ntText:
           Parent.appendChild(Doc.createTextNode(Child.Value));
@@ -220,14 +311,10 @@ begin
   Doc.async := False;
   Doc.validateOnParse := False;
 
-  // Create root element from FRootNode
   RootElem := Doc.createElement(FRootNode.Name);
   Doc.appendChild(RootElem);
 
-  // Save structure recursively
   SaveNode(FRootNode, RootElem);
-
-  // Save file
   Doc.save(Filename);
 end;
 
